@@ -277,7 +277,6 @@ def get_recent_captures():
     data = fetch_captures()
     images_html = ""
     for filename in data["captures"]:
-        # Link directly to the mounted static file
         url = f"/api/captures/static/{filename}"
         images_html += f"""
             <div style="display:inline-block; margin:10px; text-align:center;">

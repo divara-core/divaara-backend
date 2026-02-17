@@ -30,7 +30,7 @@ def cleanup_old_captures():
             pass
 
 def save_to_history(frame, scan_id, scan_type):
-    """Saves a frame as a JPEG file to disk."""
+    """Saves a frame as a JPEG file to disk at original size."""
     try:
         cleanup_old_captures()
         
@@ -38,7 +38,6 @@ def save_to_history(frame, scan_id, scan_type):
         filename = f"{uuid4().hex[:8]}_{scan_type}_{scan_id[:8]}.jpg"
         filepath = os.path.join(CAPTURE_DIR, filename)
         
-        # Save directly
         cv2.imwrite(filepath, frame)
         print(f"📸 Saved debug capture: {filepath}")
         
