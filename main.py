@@ -264,10 +264,10 @@ def tone_to_palette(tone_index: int):
 # ==============================================================================
 
 # --------------------------
-# Mount the captures directory to serve image files directly (e.g. /captures/static/image.jpg)
+# Mount the captures directory to serve image files directly (e.g. /api/captures/static/image.jpg)
 if not os.path.exists("captures"):
     os.makedirs("captures")
-app.mount("/captures/static", StaticFiles(directory="captures"), name="captures")
+app.mount("/api/captures/static", StaticFiles(directory="captures"), name="captures")
 
 # --------------------------
 # 4. CAPTURE & HISTORY ENDPOINT
@@ -278,7 +278,7 @@ def get_recent_captures():
     images_html = ""
     for filename in data["captures"]:
         # Link directly to the mounted static file
-        url = f"/captures/static/{filename}"
+        url = f"/api/captures/static/{filename}"
         images_html += f"""
             <div style="display:inline-block; margin:10px; text-align:center;">
                 <a href="{url}" target="_blank">
