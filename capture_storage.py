@@ -1,35 +1,46 @@
-from collections import deque
+import os
 import cv2
-import base64
+import glob
 from uuid import uuid4
-import numpy as np
 
 # --------------------------
-# 4. CAPTURE STORAGE (Debug/History)
+# 4. CAPTURE STORAGE (Debug on Disk)
 # --------------------------
-CAPTURE_HISTORY = deque(maxlen=200)
+
+CAPTURE_DIR = "captures"
+MAX_CAPTURES = 200
+
+# Ensure directory exists
+if not os.path.exists(CAPTURE_DIR):
+    os.makedirs(CAPTURE_DIR)
 
 def get_captures():
-    """Returns the last 200 captured frames (base64 encoded)."""
-    return {"count": len(CAPTURE_HISTORY), "captures": list(CAPTURE_HISTORY)}
+    """Returns a list of image filenames currently in the capture directory."""
+    files = sorted(glob.glob(os.path.join(CAPTURE_DIR, "*.jpg")), key=os.path.getmtime, reverse=True)
+    return {"count": len(files), "captures": [os.path.basename(f) for f in files]}
+
+def cleanup_old_captures():
+    """Keeps only the latest MAX_CAPTURES images."""
+    files = sorted(glob.glob(os.path.join(CAPTURE_DIR, "*.jpg")), key=os.path.getmtime)
+    while len(files) > MAX_CAPTURES:
+        try:
+            os.remove(files[0])
+            files.pop(0)
+        except OSError:
+            pass
 
 def save_to_history(frame, scan_id, scan_type):
-    """Encodes and saves a frame to the in-memory history."""
+    """Saves a frame as a JPEG file to disk."""
     try:
-        # Resize to reduce memory usage (optional, but good practice)
-        h, w = frame.shape[:2]
-        if w > 640:
-            scale = 640 / w
-            frame = cv2.resize(frame, (640, int(h * scale)))
-            
-        _, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
-        b64_img = base64.b64encode(buffer).decode('utf-8')
+        cleanup_old_captures()
         
-        CAPTURE_HISTORY.append({
-            "scan_id": scan_id,
-            "type": scan_type,
-            "timestamp": str(uuid4()), # simple unique string/timestamp placeholder
-            "image": f"data:image/jpeg;base64,{b64_img}"
-        })
+        # Format: timestamp_type_scanid.jpg
+        filename = f"{uuid4().hex[:8]}_{scan_type}_{scan_id[:8]}.jpg"
+        filepath = os.path.join(CAPTURE_DIR, filename)
+        
+        # Save directly
+        cv2.imwrite(filepath, frame)
+        print(f"📸 Saved debug capture: {filepath}")
+        
     except Exception as e:
-        print(f"⚠️ Failed to save capture to history: {e}")
+        print(f"⚠️ Failed to save capture to disk: {e}")
