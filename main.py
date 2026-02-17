@@ -32,6 +32,21 @@ from pydantic import BaseModel
 from capture_storage import save_to_history, get_captures as fetch_captures
 # ==============================================================================
 
+# --- App Setup ---
+API_VERSION = "v1.1"
+
+app = FastAPI(title="DIVAARA – Unified AI Backend")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+api_router = APIRouter(prefix="/api")
+
 # --- Config ---
 SHOULDER_HIP_LIMITS = (0.85, 1.25)
 WAIST_HIP_LIMITS = (0.60, 0.95)
