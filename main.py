@@ -24,28 +24,9 @@ from collections import deque, Counter
 from typing import List, Dict, Any, Optional
 from uuid import uuid4
 
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, UploadFile, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-
-# ==============================
-# FASTAPI APP SETUP
-# ==============================
-API_VERSION = "v1.1"
-
-app = FastAPI(title="DIVAARA – Unified AI Backend")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
-    allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
-)
-
-
-# ==============================================================================
-# 🟢 MODE 1: BODY SCAN CONFIGURATION & UTILS
 # ==============================================================================
 
 # --- Config ---
@@ -267,7 +248,7 @@ def tone_to_palette(tone_index: int):
 # --------------------------
 # 1. BODY SCAN ENDPOINT
 # --------------------------
-@app.post("/analyze-body")
+@api_router.post("/analyze-body")
 def analyze_body(data: FrameInput):
     scan_id = data.scan_id or str(uuid4())
     session = get_session(scan_id)
@@ -363,7 +344,7 @@ def analyze_body(data: FrameInput):
 # --------------------------
 # 2. FACE DETECTION (Night Vision + Debug File)
 # --------------------------
-@app.post("/detect-face")
+@api_router.post("/detect-face")
 def detect_face(data: FrameInput):
     # 1. Decode
     frame = decode_image(data.image)
@@ -428,7 +409,7 @@ def detect_face(data: FrameInput):
 # --------------------------
 # 3. SKIN SCAN ENDPOINT
 # --------------------------
-@app.post("/analyze-skin")
+@api_router.post("/analyze-skin")
 async def analyze_skin(files: List[UploadFile] = File(...)):
     try:
         # --- 1. Basic Validation ---
@@ -640,6 +621,9 @@ async def analyze_skin(files: List[UploadFile] = File(...)):
         traceback.print_exc()
         print(f"🔥 CRITICAL SERVER CRASH PREVENTED: {e}")
         return {"status": "error", "message": "Server processing error", "version": API_VERSION}
+
+# Include the router
+app.include_router(api_router)
 
 if __name__ == "__main__":
     # This starts the server on port 8000
