@@ -27,6 +27,7 @@ from uuid import uuid4
 from fastapi import FastAPI, File, UploadFile, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from capture_storage import save_to_history, get_captures as fetch_captures
 # ==============================================================================
 
 # --- Config ---
@@ -246,6 +247,13 @@ def tone_to_palette(tone_index: int):
 # ==============================================================================
 
 # --------------------------
+# 4. CAPTURE & HISTORY ENDPOINT
+# --------------------------
+@api_router.get("/captures")
+def get_recent_captures():
+    return fetch_captures()
+
+# --------------------------
 # 1. BODY SCAN ENDPOINT
 # --------------------------
 @api_router.post("/analyze-body")
@@ -253,6 +261,9 @@ def analyze_body(data: FrameInput):
     scan_id = data.scan_id or str(uuid4())
     session = get_session(scan_id)
     frame = decode_image(data.image)
+    if frame is not None:
+        save_to_history(frame, scan_id, "body")
+
     if frame is None:
         reset_all_queues(session)
         return {"status": "error", "version": API_VERSION, "scan_id": scan_id}
@@ -444,6 +455,9 @@ async def analyze_skin(files: List[UploadFile] = File(...)):
                 nparr = np.frombuffer(contents, np.uint8)
                 img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                 
+                if img is not None: 
+                    save_to_history(img, "skin_batch", "skin")
+
                 if img is None: 
                     print(f"⚠️ Frame {i}: Decode failed")
                     continue
