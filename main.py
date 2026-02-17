@@ -25,6 +25,8 @@ from typing import List, Dict, Any, Optional
 from uuid import uuid4
 
 from fastapi import FastAPI, File, UploadFile, APIRouter
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from capture_storage import save_to_history, get_captures as fetch_captures
@@ -247,11 +249,42 @@ def tone_to_palette(tone_index: int):
 # ==============================================================================
 
 # --------------------------
+# Mount the captures directory to serve image files directly (e.g. /captures/static/image.jpg)
+if not os.path.exists("captures"):
+    os.makedirs("captures")
+app.mount("/captures/static", StaticFiles(directory="captures"), name="captures")
+
+# --------------------------
 # 4. CAPTURE & HISTORY ENDPOINT
 # --------------------------
-@api_router.get("/captures")
+@api_router.get("/captures", response_class=HTMLResponse)
 def get_recent_captures():
-    return fetch_captures()
+    data = fetch_captures()
+    images_html = ""
+    for filename in data["captures"]:
+        # Link directly to the mounted static file
+        url = f"/captures/static/{filename}"
+        images_html += f"""
+            <div style="display:inline-block; margin:10px; text-align:center;">
+                <a href="{url}" target="_blank">
+                    <img src="{url}" style="max-width:300px; border:1px solid #ccc;"/>
+                </a>
+                <br>
+                <small>{filename}</small>
+            </div>
+        """
+    
+    return f"""
+    <html>
+        <head><title>Capture Gallery ({data['count']})</title></head>
+        <body style="font-family:sans-serif; background:#f0f0f0; padding:20px;">
+            <h1>Recent Captures ({data['count']})</h1>
+            <p>Most recent first. Click image to view full size.</p>
+            <hr>
+            {images_html}
+        </body>
+    </html>
+    """
 
 # --------------------------
 # 1. BODY SCAN ENDPOINT
