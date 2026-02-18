@@ -361,7 +361,8 @@ def analyze_body(data: FrameInput):
 
     inflated = is_waist_inflated(mask, waist_w, hip_w)
 
-    confidence_val = 0.92
+    confidence_val = 0.5
+    print("confidence_val", confidence_val)
     if inflated: confidence_val -= 0.14
     if statistics.pstdev(session["shoulder_hip_q"]) > 0.05: confidence_val -= 0.10
 
