@@ -406,6 +406,7 @@ def analyze_body(data: FrameInput):
 @api_router.post("/detect-face")
 def detect_face(data: FrameInput):
     # 1. Decode
+    print("decoding image")
     frame = decode_image(data.image)
     if frame is None:
         return {"found": False, "stable": False, "message": None}
