@@ -1,14 +1,11 @@
 # ==============================================================================
-# DIVAARA – UNIFIED AI BACKEND (Body + Skin)
-# VERSION: v1.1 (MVP/Demo + Micro-Improvements)
-# 
-# TECHNICAL AUDIT NOTES:
-# 1. QUEUES: Global queues are used for v1 simplicity (Single-Session/Demo). 
-#    In production SaaS, these must be scoped by Session ID or WebSocket connection.
-# 2. FACE DETECTION: Haar Cascades used for deterministic speed + low compute cost.
-#    MediaPipe Mesh is overkill for simple ROI extraction in v1.
-# 3. TONE ANALYSIS: LAB color space is lighting-sensitive. Reliability is ensured 
-#    via strict "Lighting Symmetry" and "Variance" gating.
+# Unified AI Backend (Body + Skin)
+# Version: v1.1
+#
+# Notes:
+# 1. Global queues used for simplicity (Single-Session).
+# 2. Haar Cascades used for speed.
+# 3. Tone analysis uses LAB color space with lighting symmetry checks.
 # ==============================================================================
 
 import cv2
@@ -29,13 +26,13 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from capture_storage import save_to_history, get_captures as fetch_captures
+from capture_storage import save_to_history
 # ==============================================================================
 
 # --- App Setup ---
 API_VERSION = "v1.1"
 
-app = FastAPI(title="DIVAARA – Unified AI Backend")
+app = FastAPI(title="DIVAARA - Unified AI Backend")
 
 app.add_middleware(
     CORSMiddleware,
@@ -57,7 +54,7 @@ MAX_WAIST_STD = 6
 CONFIDENCE_LOCK_THRESHOLD = 0.75
 
 # --- State Queues ---
-# ⚠️ ARCHITECTURE NOTE: Global state assumes single-user demo mode.
+# Architecture Note: Global state assumes single-user demo mode.
 SESSIONS: Dict[str, Dict[str, deque]] = {}
 
 def get_session(scan_id: str) -> Dict[str, deque]:
@@ -187,7 +184,7 @@ def silhouette_deform(SR, WR):
     }
 
 # ==============================================================================
-# 🟡 MODE 2: SKIN SCAN CONFIGURATION & UTILS (Hybrid ML + Rules)
+# Skin Scan Configuration & Utils (Hybrid ML + Rules)
 # ==============================================================================
 
 # --- Init Face Classifier ---
@@ -197,7 +194,7 @@ face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_fronta
 class MLEngine:
     """
     Placeholder for MobileNet/TFLite model.
-    Acts as a VALIDATOR (Check) not a DICTATOR (Decision).
+    Acts as a validator, not a decision maker.
     """
     def analyze(self, face_roi: np.ndarray) -> Dict[str, Any]:
         h, w, _ = face_roi.shape
@@ -237,7 +234,7 @@ def detect_face_shape_rules(w, h):
     else: return "square"
 
 # ==============================
-# 🎨 SKIN TONE PALETTE (LAB-L BASED)
+# Skin Tone Palette (LAB-L Based)
 # ==============================
 
 TONE_PALETTE = [
@@ -260,45 +257,8 @@ def tone_to_palette(tone_index: int):
 
 
 # ==============================================================================
-# 🚀 ENDPOINTS
+# Endpoints
 # ==============================================================================
-
-# --------------------------
-# Mount the captures directory to serve image files directly (e.g. /api/captures/static/image.jpg)
-if not os.path.exists("captures"):
-    os.makedirs("captures")
-app.mount("/api/captures/static", StaticFiles(directory="captures"), name="captures")
-
-# --------------------------
-# 4. CAPTURE & HISTORY ENDPOINT
-# --------------------------
-@api_router.get("/captures", response_class=HTMLResponse)
-def get_recent_captures():
-    data = fetch_captures()
-    images_html = ""
-    for filename in data["captures"]:
-        url = f"/api/captures/static/{filename}"
-        images_html += f"""
-            <div style="display:inline-block; margin:10px; text-align:center;">
-                <a href="{url}" target="_blank">
-                    <img src="{url}" style="max-width:300px; border:1px solid #ccc;"/>
-                </a>
-                <br>
-                <small>{filename}</small>
-            </div>
-        """
-    
-    return f"""
-    <html>
-        <head><title>Capture Gallery ({data['count']})</title></head>
-        <body style="font-family:sans-serif; background:#f0f0f0; padding:20px;">
-            <h1>Recent Captures ({data['count']})</h1>
-            <p>Most recent first. Click image to view full size.</p>
-            <hr>
-            {images_html}
-        </body>
-    </html>
-    """
 
 # --------------------------
 # 1. BODY SCAN ENDPOINT
@@ -356,7 +316,7 @@ def analyze_body(data: FrameInput):
     avg_SR = float(np.clip(statistics.mean(session["shoulder_hip_q"]), *SHOULDER_HIP_LIMITS))
     avg_WR = float(np.clip(statistics.mean(session["waist_hip_q"]), *WAIST_HIP_LIMITS))
     
-    # Division-by-zero protection (Polish B)
+    # Division-by-zero protection
     avg_SW = avg_SR / avg_WR if avg_WR > 0 else 1.0
 
     inflated = is_waist_inflated(mask, waist_w, hip_w)
@@ -370,7 +330,7 @@ def analyze_body(data: FrameInput):
     final_conf = round(statistics.mean(session["confidence_q"]), 2)
 
     if final_conf < CONFIDENCE_LOCK_THRESHOLD:
-        reset_all_queues(session) # Reset queues on fail (Polish A)
+        reset_all_queues(session) # Reset queues on fail
         return {"status": "scan_not_reliable", "version": API_VERSION, "scan_id": scan_id}
 
     shape = primary_shape(avg_SR, avg_WR, avg_SW, inflated)
@@ -409,16 +369,14 @@ def detect_face(data: FrameInput):
     if frame is None:
         return {"found": False, "stable": False, "message": None}
 
-    # 2. Save what the server "sees" (CHECK THIS FILE IN YOUR FOLDER!)
-    # If this image is black, your browser is blocking the camera.
-    # If this image shows your face, the code is working!
+    # 2. Save server view for debugging
     if os.getenv("ENV") == "dev":
-        cv2.imwrite("server_view_debug.jpg", frame)
+        cv2.imwrite("server_view_debug.png", frame)
 
-    # 3. "Night Vision" Processing
+    # 3. Pre-process
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     
-    # EQUALIZE HISTOGRAM: Boosts contrast so faces pop out in dim light
+    # Equalize histogram to boost contrast
     gray = cv2.equalizeHist(gray)
 
     # 4. Ultra-Sensitive Detection
@@ -427,7 +385,6 @@ def detect_face(data: FrameInput):
     faces = face_cascade.detectMultiScale(gray, 1.05, 3)
 
     if len(faces) == 0:
-        print("👀 DEBUG: Still looking... (Check server_view_debug.jpg)")
         return {"found": False, "stable": False, "message": None}
 
     # 5. Lock Logic
@@ -435,7 +392,7 @@ def detect_face(data: FrameInput):
     frame_h, frame_w = frame.shape[:2]
     face_ratio = (w * h) / (frame_h * frame_w)
 
-    print(f"✅ FACE LOCKED! Ratio: {face_ratio:.3f}")
+    print(f"Face locked! Ratio: {face_ratio:.3f}")
 
     if face_ratio < 0.05:
         return {"found": True, "stable": False, "message": "move_closer"}
@@ -456,7 +413,7 @@ def detect_face(data: FrameInput):
         # Very permissive stability check (20.0 variance allowed)
         if np.std(xs) < 20.0 and np.std(ys) < 20.0:
             stable = True
-            print("📸 CAPTURING!")
+            print("Capturing!")
 
     return {
         "found": True,
@@ -474,9 +431,9 @@ async def analyze_skin(files: List[UploadFile] = File(...)):
         if not files or len(files) == 0:
             return {"status": "error", "message": "No frames received.", "version": API_VERSION}
 
-        print(f"📥 DEBUG: Received {len(files)} frames for analysis...")
+        print(f"Received {len(files)} frames for analysis...")
         
-        # ✅ FIX APPLIED HERE: Reduced from 15 to 3 for speed
+        # Reduced from 15 to 3 for speed
         MAX_FRAMES = 3 
         files = files[:MAX_FRAMES]
 
@@ -506,7 +463,7 @@ async def analyze_skin(files: List[UploadFile] = File(...)):
                     save_to_history(img, "skin_batch", "skin")
 
                 if img is None: 
-                    print(f"⚠️ Frame {i}: Decode failed")
+                    print(f"Frame {i}: Decode failed")
                     continue
 
                 # A. Blur Check
@@ -549,7 +506,7 @@ async def analyze_skin(files: List[UploadFile] = File(...)):
                         reject_reasons["lighting_ml"] += 1
                         continue
                 except Exception as e:
-                    print(f"⚠️ ML Error on frame {i}: {e}")
+                    print(f"ML Error on frame {i}: {e}")
                     reject_reasons["processing_error"] += 1
                     continue
 
@@ -595,13 +552,13 @@ async def analyze_skin(files: List[UploadFile] = File(...)):
                 conf_scores.append((l_score * 0.7) + (d_score * 0.3))
 
             except Exception as e:
-                print(f"⚠️ Error processing individual frame {i}: {e}")
+                print(f"Error processing individual frame {i}: {e}")
                 reject_reasons["processing_error"] += 1
                 continue
 
         # --- 3. Aggregation Logic (Safe) ---
         if len(lab_history) == 0:
-            print("❌ DEBUG: All frames rejected. Reasons:", reject_reasons)
+            print("All frames rejected. Reasons:", reject_reasons)
             dominant = max(reject_reasons, key=reject_reasons.get)
             messages = {
                 "blur": "Hold still.", "no_face": "Align face.", 
@@ -631,7 +588,7 @@ async def analyze_skin(files: List[UploadFile] = File(...)):
         final_conf = float(np.clip(np.sum(valid_conf_array * weights), 0, 1))
         
         # ==============================
-        # 🎨 SKIN TONE (LAB → INDEX → PALETTE)
+        # Skin Tone (LAB -> Index -> Palette)
         # ==============================
 
         avg_l, avg_a, avg_b = np.mean(valid_labs, axis=0)
@@ -651,7 +608,7 @@ async def analyze_skin(files: List[UploadFile] = File(...)):
 
         final_shape = "oval"  # Stable fallback
 
-        print(f"✅ DEBUG: SUCCESS! Tone: {palette['label']}, Undertone: {undertone}")
+        print(f"Success! Tone: {palette['label']}, Undertone: {undertone}")
 
         return {
             "status": "success",
@@ -678,14 +635,11 @@ async def analyze_skin(files: List[UploadFile] = File(...)):
         }
 
     except Exception as e:
-        # --- 4. CATCH-ALL CRASH HANDLER ---
         traceback.print_exc()
-        print(f"🔥 CRITICAL SERVER CRASH PREVENTED: {e}")
+        print(f"Server error: {e}")
         return {"status": "error", "message": "Server processing error", "version": API_VERSION}
 
-# Include the router
 app.include_router(api_router)
 
 if __name__ == "__main__":
-    # This starts the server on port 8000
     uvicorn.run(app, host="0.0.0.0", port=8000)
